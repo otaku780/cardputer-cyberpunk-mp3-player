@@ -8,9 +8,27 @@
 
 SPIClass SDSPI(HSPI);
 
-#define CYAN 0x07FF
-#define MAGENTA 0xF81F
 #define BLACKC 0x0000
+
+struct Theme {
+  uint16_t primary;
+  uint16_t accent;
+  const char* name;
+};
+
+Theme themes[] = {
+  {0x07FF, 0xF81F, "CYAN/MAGENTA"},
+  {0x07E0, 0x05A0, "GREEN MONO"},
+  {0xF800, 0xFA8A, "RED ALERT"},
+  {0xF8B2, 0xFB56, "PINK"},
+  {0xFC60, 0xFE40, "ORANGE"},
+  {0xFFE0, 0xFFF2, "YELLOW"}
+};
+const int numThemes = 6;
+int themeIndex = 0;
+
+uint16_t PRIMARY() { return themes[themeIndex].primary; }
+uint16_t ACCENT() { return themes[themeIndex].accent; }
 
 class AudioOutputM5Speaker : public AudioOutput {
  public:
@@ -73,13 +91,16 @@ int cachedBattery = 0;
 int screenW = 240;
 int screenH = 135;
 
+int volume = 180;
+unsigned long volMsgUntil = 0;
+
 const int numBars = 16;
 int barHeights[numBars];
 int barTargets[numBars];
 
 void drawBorder() {
-  M5Cardputer.Display.drawRect(0, 0, screenW, screenH, CYAN);
-  M5Cardputer.Display.drawRect(1, 1, screenW - 2, screenH - 2, CYAN);
+  M5Cardputer.Display.drawRect(0, 0, screenW, screenH, PRIMARY());
+  M5Cardputer.Display.drawRect(1, 1, screenW - 2, screenH - 2, PRIMARY());
 }
 
 void drawBattery() {
@@ -88,7 +109,7 @@ void drawBattery() {
     cachedBattery = M5Cardputer.Power.getBatteryLevel();
     lastBatteryCheck = now;
   }
-  M5Cardputer.Display.setTextColor(CYAN, BLACKC);
+  M5Cardputer.Display.setTextColor(PRIMARY(), BLACKC);
   String batStr = String(cachedBattery) + "%";
   int x = screenW - 6 - (batStr.length() * 6);
   M5Cardputer.Display.drawString(batStr, x, 5);
@@ -98,13 +119,13 @@ void drawList() {
   M5Cardputer.Display.fillScreen(BLACKC);
   drawBorder();
   M5Cardputer.Display.setTextSize(1);
-  M5Cardputer.Display.setTextColor(MAGENTA, BLACKC);
-  M5Cardputer.Display.drawString("MP3 PLAYER // v2", 6, 5);
+  M5Cardputer.Display.setTextColor(ACCENT(), BLACKC);
+  M5Cardputer.Display.drawString("MP3 PLAYER // v3", 6, 5);
   drawBattery();
-  M5Cardputer.Display.drawFastHLine(4, 16, screenW - 8, CYAN);
+  M5Cardputer.Display.drawFastHLine(4, 16, screenW - 8, PRIMARY());
 
   if (songCount == 0) {
-    M5Cardputer.Display.setTextColor(CYAN, BLACKC);
+    M5Cardputer.Display.setTextColor(PRIMARY(), BLACKC);
     M5Cardputer.Display.drawString("No MP3 files found", 6, 26);
   } else {
     for (int i = 0; i < visibleRows; i++) {
@@ -112,10 +133,10 @@ void drawList() {
       if (idx >= songCount) break;
       int y = 20 + i * 14;
       if (idx == selected) {
-        M5Cardputer.Display.fillRect(4, y - 1, screenW - 8, 13, CYAN);
-        M5Cardputer.Display.setTextColor(BLACKC, CYAN);
+        M5Cardputer.Display.fillRect(4, y - 1, screenW - 8, 13, PRIMARY());
+        M5Cardputer.Display.setTextColor(BLACKC, PRIMARY());
       } else {
-        M5Cardputer.Display.setTextColor(CYAN, BLACKC);
+        M5Cardputer.Display.setTextColor(PRIMARY(), BLACKC);
       }
       String name = songs[idx];
       if (name.length() > 32) name = name.substring(0, 32);
@@ -123,9 +144,9 @@ void drawList() {
     }
   }
 
-  M5Cardputer.Display.drawFastHLine(4, screenH - 16, screenW - 8, CYAN);
-  M5Cardputer.Display.setTextColor(MAGENTA, BLACKC);
-  M5Cardputer.Display.drawString(";/.=move  ENTER=play", 6, screenH - 12);
+  M5Cardputer.Display.drawFastHLine(4, screenH - 16, screenW - 8, PRIMARY());
+  M5Cardputer.Display.setTextColor(ACCENT(), BLACKC);
+  M5Cardputer.Display.drawString(";/.=move ENTER=play L=theme", 6, screenH - 12);
 }
 
 String formatTime(unsigned long ms) {
@@ -144,42 +165,59 @@ void drawPlayerScreen(String status) {
   M5Cardputer.Display.fillScreen(BLACKC);
   drawBorder();
   M5Cardputer.Display.setTextSize(1);
-  M5Cardputer.Display.setTextColor(MAGENTA, BLACKC);
+  M5Cardputer.Display.setTextColor(ACCENT(), BLACKC);
   M5Cardputer.Display.drawString("NOW PLAYING", 6, 5);
   drawBattery();
-  M5Cardputer.Display.drawFastHLine(4, 16, screenW - 8, CYAN);
+  M5Cardputer.Display.drawFastHLine(4, 16, screenW - 8, PRIMARY());
 
   String name = songs[selected];
   if (name.length() > 32) name = name.substring(0, 32);
-  M5Cardputer.Display.setTextColor(MAGENTA, BLACKC);
+  M5Cardputer.Display.setTextColor(ACCENT(), BLACKC);
   M5Cardputer.Display.drawString(name, 8, 22);
 
-  M5Cardputer.Display.setTextColor(CYAN, BLACKC);
+  M5Cardputer.Display.setTextColor(PRIMARY(), BLACKC);
   M5Cardputer.Display.drawString(status, 8, 36);
 
   barAreaX = 8;
   barAreaY = 50;
   barAreaW = screenW - 16;
   barAreaH = 36;
-  M5Cardputer.Display.drawRect(barAreaX - 2, barAreaY - 2, barAreaW + 4, barAreaH + 4, CYAN);
+  M5Cardputer.Display.drawRect(barAreaX - 2, barAreaY - 2, barAreaW + 4, barAreaH + 4, PRIMARY());
 
   for (int i = 0; i < numBars; i++) {
     barHeights[i] = 2;
     barTargets[i] = 2;
   }
 
-  M5Cardputer.Display.drawFastHLine(4, screenH - 30, screenW - 8, CYAN);
-  M5Cardputer.Display.setTextColor(MAGENTA, BLACKC);
+  M5Cardputer.Display.drawFastHLine(4, screenH - 30, screenW - 8, PRIMARY());
+  M5Cardputer.Display.setTextColor(ACCENT(), BLACKC);
   M5Cardputer.Display.drawString("P:pause N:next B:prev Q:list", 6, screenH - 26);
-  M5Cardputer.Display.drawFastHLine(4, screenH - 16, screenW - 8, CYAN);
+  M5Cardputer.Display.drawFastHLine(4, screenH - 16, screenW - 8, PRIMARY());
 }
 
 void updatePlayerTime() {
   if (!inPlayerScreen) return;
+  if (millis() < volMsgUntil) return;
   unsigned long elapsed = isPlaying ? (millis() - songStartMillis + pausedElapsed) : pausedElapsed;
-  M5Cardputer.Display.fillRect(90, 36, 60, 12, BLACKC);
-  M5Cardputer.Display.setTextColor(CYAN, BLACKC);
+  M5Cardputer.Display.fillRect(90, 36, 90, 12, BLACKC);
+  M5Cardputer.Display.setTextColor(PRIMARY(), BLACKC);
   M5Cardputer.Display.drawString(formatTime(elapsed), 90, 36);
+}
+
+void showVolume() {
+  int pct = (volume * 100) / 255;
+  M5Cardputer.Display.fillRect(90, 36, 90, 12, BLACKC);
+  M5Cardputer.Display.setTextColor(ACCENT(), BLACKC);
+  M5Cardputer.Display.drawString("Vol:" + String(pct) + "%", 90, 36);
+  volMsgUntil = millis() + 1200;
+}
+
+void changeVolume(int delta) {
+  volume += delta;
+  if (volume < 0) volume = 0;
+  if (volume > 255) volume = 255;
+  M5Cardputer.Speaker.setVolume(volume);
+  if (inPlayerScreen) showVolume();
 }
 
 void updateVisualizer() {
@@ -205,7 +243,16 @@ void updateVisualizer() {
     int x = barAreaX + i * barW;
     M5Cardputer.Display.fillRect(x, barAreaY, barW - 1, barAreaH, BLACKC);
     int h = barHeights[i];
-    M5Cardputer.Display.fillRect(x, barAreaY + (barAreaH - h), barW - 1, h, MAGENTA);
+    M5Cardputer.Display.fillRect(x, barAreaY + (barAreaH - h), barW - 1, h, ACCENT());
+  }
+}
+
+void cycleTheme() {
+  themeIndex = (themeIndex + 1) % numThemes;
+  if (inPlayerScreen) {
+    drawPlayerScreen(isPlaying ? "Playing..." : "Paused");
+  } else {
+    drawList();
   }
 }
 
@@ -240,6 +287,7 @@ void startSong(int idx) {
   inPlayerScreen = true;
   songStartMillis = millis();
   pausedElapsed = 0;
+  volMsgUntil = 0;
   drawPlayerScreen("Playing...");
 }
 
@@ -254,7 +302,7 @@ void setup() {
   auto cfg = M5.config();
   M5Cardputer.begin(cfg, true);
   M5Cardputer.Speaker.begin();
-  M5Cardputer.Speaker.setVolume(255);
+  M5Cardputer.Speaker.setVolume(volume);
   M5Cardputer.Display.setRotation(1);
 
   screenW = M5Cardputer.Display.width();
@@ -301,7 +349,22 @@ void loop() {
   if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) {
     Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
 
-    if (!inPlayerScreen) {
+    bool themeKeyHit = false;
+    bool volUpHit = false;
+    bool volDownHit = false;
+    for (auto c : ks.word) {
+      if (c == 'l' || c == 'L') themeKeyHit = true;
+      if (c == 'g' || c == 'G') volUpHit = true;
+      if (c == 'v' || c == 'V') volDownHit = true;
+    }
+
+    if (themeKeyHit) {
+      cycleTheme();
+    } else if (volUpHit) {
+      changeVolume(25);
+    } else if (volDownHit) {
+      changeVolume(-25);
+    } else if (!inPlayerScreen) {
       for (auto c : ks.word) {
         if (c == ';') {
           if (selected > 0) selected--;
